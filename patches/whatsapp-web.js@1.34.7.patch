@@ -1,0 +1,42 @@
+diff --git a/src/util/Injected/Utils.js b/src/util/Injected/Utils.js
+index 540078a9d07b3df07ccd51b030556a72af4cf650..337289c4ab5fdec9ec5ae94bd6909dc520eb6e57 100644
+--- a/src/util/Injected/Utils.js
++++ b/src/util/Injected/Utils.js
+@@ -483,6 +483,9 @@ exports.LoadUtils = () => {
+             ...extraOptions,
+         };
+ 
++        // MediaData's private ID must not overwrite the outgoing Msg ID.
++        delete message.__x_id;
++
+         // Bot's won't reply if canonicalUrl is set (linking)
+         if (botOptions) {
+             delete message.canonicalUrl;
+@@ -582,7 +585,7 @@ exports.LoadUtils = () => {
+ 
+         return window
+             .require('WAWebCollections')
+-            .Msg.get(newMsgKey._serialized);
++            .Msg.get(newMsgKey._serialized || newMsgKey.$1);
+     };
+ 
+     window.WWebJS.editMessage = async (msg, content, options = {}) => {
+@@ -802,6 +805,9 @@ exports.LoadUtils = () => {
+ 
+     window.WWebJS.getMessageModel = (message) => {
+         const msg = message.serialize();
++        if (msg.id && !msg.id._serialized && msg.id.$1) {
++            msg.id = { ...msg.id, _serialized: msg.id.$1 };
++        }
+ 
+         const { findLinks } = window.require('WALinkify');
+ 
+@@ -830,7 +836,7 @@ exports.LoadUtils = () => {
+ 
+         if (typeof msg.id.remote === 'object') {
+             msg.id = Object.assign({}, msg.id, {
+-                remote: msg.id.remote._serialized,
++                remote: msg.id.remote._serialized || msg.id.remote.$1,
+             });
+         }
+ 

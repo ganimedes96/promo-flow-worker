@@ -1,0 +1,5 @@
+allowBuilds:
+  esbuild: true
+  puppeteer: false
+patchedDependencies:
+  whatsapp-web.js@1.34.7: patches/whatsapp-web.js@1.34.7.patch
