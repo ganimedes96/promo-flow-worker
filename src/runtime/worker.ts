@@ -1,7 +1,7 @@
 import { WorkerHeartbeatLifecycle } from "./worker-heartbeat";
 import { PublicationProcessor } from "../publishing/publication.types";
 import { WorkerApi, SessionManager } from "../types/whatsapp.types";
-import { errorMessage } from "../utils/error-message";
+import { runtimeLog } from "../utils/runtime-log";
 import { WorkerLock } from "./worker-lock";
 export class Worker {
   private stopping = false;
@@ -16,6 +16,10 @@ export class Worker {
     private readonly interval: number,
     private readonly publications?: PublicationProcessor,
     private readonly heartbeat?: WorkerHeartbeatLifecycle,
+    private readonly activity?: {
+      poll(): Promise<void>;
+      stop(): Promise<void>;
+    },
   ) {}
   async start(): Promise<void> {
     this.starting = (async () => {
@@ -30,14 +34,25 @@ export class Worker {
       const sessions = await this.api.getPendingSessions();
       for (const session of sessions) {
         if (this.stopping) break;
-        if (session.status === "DISCONNECTED")
-          await this.sessions.disconnect(session.userId);
-        else this.sessions.connect(session.userId);
+        if (session.status === "SUSPENDED" || session.status === "ERROR")
+          await this.sessions.suspend(session.connectionId);
+        else if (session.status === "DISCONNECTED")
+          await this.sessions.disconnect(session.connectionId);
+        else
+          this.sessions.connect(
+            session.connectionId,
+            session.status,
+            session.authKey,
+          );
       }
       if (!this.stopping) await this.sessions.refreshGroups();
+      if (!this.stopping)
+        await this.activity
+          ?.poll()
+          .catch((error) => runtimeLog("group.activity.unavailable", error));
       if (!this.stopping) await this.publications?.poll();
     } catch (error: unknown) {
-      console.error("Falha na consulta:", errorMessage(error));
+      runtimeLog("worker.poll.failed", error);
     }
     if (!this.stopping)
       this.timer = setTimeout(() => {
@@ -47,6 +62,7 @@ export class Worker {
   stop(): Promise<void> {
     if (this.shutdown) return this.shutdown;
     this.stopping = true;
+    this.publications?.stop?.();
     if (this.timer) clearTimeout(this.timer);
     this.shutdown = this.finishShutdown();
     return this.shutdown;
@@ -55,6 +71,7 @@ export class Worker {
     await this.starting.catch(() => undefined);
     try {
       await this.polling;
+      await this.activity?.stop();
     } finally {
       try {
         await this.sessions.stop();

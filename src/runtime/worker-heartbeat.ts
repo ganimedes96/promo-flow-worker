@@ -1,4 +1,4 @@
-import { errorMessage } from "../utils/error-message";
+import { runtimeLog } from "../utils/runtime-log";
 interface HeartbeatApi {
   heartbeat(
     publishingEnabled: boolean,
@@ -11,6 +11,8 @@ export interface WorkerHeartbeatLifecycle {
 }
 export class WorkerHeartbeat implements WorkerHeartbeatLifecycle {
   private timer?: NodeJS.Timeout;
+  private failed = false;
+  private lastFailureAt = 0;
   private pending?: Promise<void>;
   constructor(
     private readonly api: HeartbeatApi,
@@ -19,11 +21,14 @@ export class WorkerHeartbeat implements WorkerHeartbeatLifecycle {
   private async send(state: "RUNNING" | "STOPPED"): Promise<void> {
     try {
       await this.api.heartbeat(this.publishingEnabled, state);
+      if (this.failed) runtimeLog("worker.heartbeat.recovered");
+      this.failed = false;
     } catch (error: unknown) {
-      console.error(
-        "Falha ao atualizar atividade do worker:",
-        errorMessage(error),
-      );
+      if (!this.failed || Date.now() - this.lastFailureAt >= 30000) {
+        runtimeLog("worker.heartbeat.failed", error);
+        this.lastFailureAt = Date.now();
+      }
+      this.failed = true;
     }
   }
   async start(): Promise<void> {

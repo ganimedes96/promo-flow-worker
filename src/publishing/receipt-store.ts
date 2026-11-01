@@ -19,7 +19,10 @@ export class ReceiptStore {
   async save(receipt: PublicationReceipt): Promise<void> {
     await mkdir(this.directory, { recursive: true });
     const file = this.file(receipt.attemptId);
-    await writeFile(file + ".tmp", JSON.stringify(receipt), { mode: 0o600 });
+    await writeFile(file + ".tmp", JSON.stringify(receipt), {
+      mode: 0o600,
+      flush: true,
+    });
     await rename(file + ".tmp", file);
   }
   async list(): Promise<PublicationReceipt[]> {

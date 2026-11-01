@@ -1,0 +1,11 @@
+node_modules
+dist
+.git
+.env
+.env.*
+*.env
+data
+.wwebjs_cache
+test
+.patch-work
+npm-debug.log*

@@ -88,3 +88,55 @@ Compatibilidade do whatsapp-web.js 1.34.7: o pnpm aplica patches/whatsapp-web.js
 O worker envia heartbeat independente a cada 10 segundos, inclusive durante publicações, com um identificador novo por execução. Ao encerrar, informa STOPPED após concluir as operações e fechar as sessões. Reinicie API e worker juntos após atualizar esta versão, pois a reserva de jobs passou a exigir workerInstanceId e heartbeat. Se o processo cair, a API encaminha tentativas sem confirmação para conferência manual; recibos locais continuam sendo reapresentados sem reenviar mensagens.
 
 Operação contínua local: consulte ../ops/README.md. No modo supervisionado, use ops/stop.ps1 para encerrar o worker e ops/start.ps1 para iniciar. O supervisor recebe confirmação de inicialização e envia shutdown para encerramento gracioso no Windows. Backups completos pausam o worker e o retomam ao concluir.
+
+## Múltiplos números por usuário
+
+O worker agora identifica cada sessão pelo connectionId da API, em vez de userId. A pasta LocalAuth usa authKey; a migration mantém authKey=userId para as conexões antigas, preservando os arquivos já existentes. Novas conexões usam uma chave própria. Não mover nem apagar as pastas de autenticação e recibos durante a atualização.
+
+Atualize a API junto com o worker: pending exige o protocolo connections-v1, sincronização usa /internal/whatsapp/connections/:connectionId e claim usa connectionId. O worker só publica com o cliente da conexão retornada pelo claim e rejeita um resultado com outra conexão.
+
+Pausar envios na interface não encerra o navegador: a API bloqueia novas reservas e preserva a fila. Suspensão por acesso vencido e erros de autenticação encerram o cliente preservando o armazenamento local quando possível. Desconectar pelo painel solicita logout somente da conexão escolhida.
+
+MAX_CONCURRENT_SESSIONS (padrão 5) é o total de conexões simultâneas neste processo. A operação continua local e com uma única instância ativa. Esta alteração não instala wacli.
+
+
+## Coleta opcional de promoções
+
+`src/collection/collector.client.ts` encaminha mensagens recebidas de grupos habilitados para o coletor compartilhado na pasta irmã `promo-flow-telegram`. Configurar `COLLECTOR_URL=http://127.0.0.1:3344` e `COLLECTOR_LOCAL_TOKEN` igual ao coletor. O destino fica restrito a loopback. Desabilite removendo `COLLECTOR_URL`. Não altera o intervalo de publicação de dois minutos nem cria uma segunda sessão WhatsApp.
+
+Publique primeiro a API com a migration 20261031060000_whatsapp_promotion_collection e o frontend. Execute ambos os processos e ative os grupos em Fontes de promoções → WhatsApp. Apenas contas de administrador podem servir de fonte. Mensagens próprias são ignoradas para evitar ciclos. A ponte é de mensagens novas, com fila em memória limitada e três tentativas; não substitui um histórico persistente. Veja o README do coletor para limites e rotas Fastify.
+
+
+## Imagens WhatsApp — atualização de captura
+
+O worker tenta baixar novamente a mídia até três vezes (tempo total máximo de 15 segundos), atualizando somente a mensagem que acabou de receber pelo SDK. Trata foto anexada, documento com MIME JPEG/PNG/WebP e prévias de imagem embutidas no próprio conteúdo recebido. Não segue URLs remotas de thumbnails. Prefere o arquivo completo; usa a prévia disponível como alternativa e informa isso no log. Prévia pode ter resolução menor. Falha definitiva preserva o rascunho e exibe aviso sem registrar o texto da mensagem, número ou conteúdo da imagem. O coletor informa se a normalização rejeitou o arquivo. Reinicie worker e coletor para carregar o código novo. Não precisa de migration nem novo login. Capturas antigas sem foto não são preenchidas automaticamente por este ajuste.
+
+
+## Correção de download WhatsApp: MIME declarado
+
+A validação real em 31/10/2026 identificou InvalidMediaFileType no DownloadManager: whatsapp-web.js 1.34.7 omitia mimetype e fotos não cacheadas eram tratadas como application/octet-stream. O patch pnpm existente agora também passa `mimetype: msg.mimetype`, preservando as correções de identificadores. O arquivo patches/whatsapp-web.js@1.34.7.patch e o pnpm-lock.yaml precisam acompanhar o projeto; uma instalação normal mantém a correção. Regressão executa o método real do SDK em contexto isolado com um gerenciador que rejeita MIME ausente. Três fotos reais foram recuperadas e conferidas pela API, sem publicação. Reinicie o worker para carregar a biblioteca corrigida. Não precisa de migration nem novo QR Code. Referência: https://github.com/wwebjs/whatsapp-web.js/issues/201908
+
+## Recuperacao segura de publicacoes
+
+Antes de chamar o WhatsApp, o worker grava em disco um recibo UNKNOWN com a intencao de envio, com flush e substituicao atomica. Ao obter o resultado, substitui esse recibo por SUCCESS, FAILED ou UNKNOWN. Na inicializacao, apenas repassa os recibos a API; nunca repete o envio para recuperar uma confirmacao perdida. Se nao conseguir persistir a intencao, nao envia a mensagem.
+
+O envio tem limite de 90 segundos para confirmar o resultado. Um timeout nao comprova falha: a tentativa fica sem confirmacao, bloqueia esse grupo na API e exige conferir a conversa antes de qualquer reenvio. Ctrl+C impede novas reservas e conclui a tentativa atual antes de fechar as sessoes. Nenhum mecanismo garante entrega exatamente uma vez pelo WhatsApp Web; resultados ambiguos nunca sao reenviados automaticamente.
+
+Validacao sem WhatsApp: pnpm build e node --test test/publication-recovery.test.cjs. Os testes usam clientes simulados e diretorios temporarios, sem rede externa. Mantenha data/receipts entre reinicios. Nao remova recibos para liberar a fila.
+
+## Logs de operacao
+
+As falhas de consulta e heartbeat usam eventos JSON com time, event, errorType, statusCode e requestId quando a API fornece uma referencia. O resultado de publicacao registra attemptId, offerId e outcome, sem texto, imagem ou telefone. Procure a referencia no log da API da Vercel para correlacionar a falha. Nao compartilhe o token nem os arquivos de autenticacao.
+
+A pagina Operacao e exclusiva do administrador e mostra o ultimo contato e se a publicacao esta habilitada. Reinicie o worker com o codigo atualizado apos publicar a API e o frontend. Os indicadores de comunicacao nao substituem a conferencia de mensagens sem confirmacao.
+
+## Personalizacao das mensagens
+
+O job recebido inclui messageTemplate e messageHeadline. O worker aplica apenas os campos selecionados; cupons e descontos ausentes sao omitidos. Uma frase individual substitui a chamada padrao. Descricao e limitada a 300 caracteres, chamada a 80, rodape a 200 e legenda/texto a 1000. Opcoes invalidas, texto vazio sem imagem e mensagem acima do limite falham antes de enviar.
+
+Com showImage=false, nao baixa a imagem e envia texto com linkPreview=false. Sem configuracao no job, mantem o formato anterior. A reserva anuncia x-worker-features: message-template-v1. Publique a API com a migracao de templates e reinicie o worker atualizado; a API recusa workers antigos para evitar mensagens fora do padrao escolhido.
+
+Testes sem WhatsApp real: pnpm build e node --test test/message-template.test.cjs. As verificacoes usam somente clientes simulados.
+
+## Monitoramento de grupos
+Atualize a API e aplique `20261101050000_group_growth`, depois reinicie o worker. A sincronização inclui contagem de participantes quando disponível. Entradas/saídas recebidas pelo SDK são persistidas em `data/sessions/group-activity` (ou SESSION_PATH configurado), reenviadas após falhas e deduplicadas na API. Não exclua esse diretório durante reinícios. Pendências expiram após 72 horas. O histórico começa na ativação; períodos offline podem não ser recuperados. Não armazenamos IDs de participantes.

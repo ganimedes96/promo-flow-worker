@@ -4,3 +4,7 @@ dist/
 data/
 .wwebjs_auth/
 .wwebjs_cache/
+
+.env.*
+!.env.example
+!.env.hosted.example

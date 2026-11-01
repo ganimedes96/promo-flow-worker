@@ -1,3 +1,4 @@
+import { largerProductImage } from "./product-image";
 import { lookup } from "node:dns/promises";
 import { get as httpGet } from "node:http";
 import { get as httpsGet } from "node:https";
@@ -97,7 +98,17 @@ async function download(source: string, redirects = 0): Promise<Buffer> {
   });
 }
 export async function downloadImage(source: string): Promise<MessageMedia> {
-  const bytes = await download(source);
+  const larger = largerProductImage(source);
+  let bytes: Buffer;
+  if (larger === source) {
+    bytes = await download(source);
+  } else {
+    try {
+      bytes = await download(larger);
+    } catch {
+      bytes = await download(source);
+    }
+  }
   const mime = bytes
     .subarray(0, 8)
     .equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))

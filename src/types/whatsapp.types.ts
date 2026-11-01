@@ -8,12 +8,27 @@ export const SESSION_STATUSES = [
 ] as const;
 export type SessionStatus = (typeof SESSION_STATUSES)[number];
 export interface PendingSession {
+  connectionId: string;
+  authKey: string;
   userId: string;
-  status: SessionStatus;
+  status: SessionStatus | "SUSPENDED";
 }
 export interface WhatsAppGroup {
   whatsappId: string;
   name: string;
+  participantCount?: number;
+  isCommunity?: boolean;
+}
+export interface GroupActivity {
+  eventId: string;
+  whatsappId: string;
+  kind: "JOIN" | "LEAVE";
+  count: number;
+  occurredAt: string;
+}
+export interface GroupActivityBatch {
+  connectedPhone: string;
+  events: GroupActivity[];
 }
 export type SessionUpdate =
   | { status: "WAITING_QR"; qrCode: string }
@@ -22,12 +37,17 @@ export type SessionUpdate =
   | { status: "ERROR"; errorMessage: string };
 export interface WorkerApi {
   getPendingSessions(): Promise<PendingSession[]>;
-  updateSession(userId: string, update: SessionUpdate): Promise<void>;
-  synchronizeGroups(userId: string, groups: WhatsAppGroup[]): Promise<void>;
+  updateSession(connectionId: string, update: SessionUpdate): Promise<void>;
+  synchronizeGroups(
+    connectionId: string,
+    groups: WhatsAppGroup[],
+    connectedPhone: string,
+  ): Promise<void>;
 }
 export interface SessionManager {
-  connect(userId: string): void;
+  connect(connectionId: string, status?: SessionStatus, authKey?: string): void;
   refreshGroups(): Promise<void>;
-  disconnect(userId: string): Promise<void>;
+  disconnect(connectionId: string): Promise<void>;
+  suspend(connectionId: string): Promise<void>;
   stop(): Promise<void>;
 }

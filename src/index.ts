@@ -1,3 +1,6 @@
+import { join } from "node:path";
+import { GroupActivityTracker } from "./whatsapp/group-activity";
+import { CollectionClient } from "./collection/collector.client";
 import { WorkerHeartbeat } from "./runtime/worker-heartbeat";
 import { PublicationWorker } from "./publishing/publication-worker";
 import { ReceiptStore } from "./publishing/receipt-store";
@@ -13,10 +16,23 @@ import { WhatsAppSessionManager } from "./whatsapp/session-manager";
 async function main(): Promise<void> {
   const config = loadWorkerConfig();
   const api = new WorkerApiClient(config);
+  const collector = new CollectionClient(config);
+  const activity = new GroupActivityTracker(
+    api,
+    join(config.sessionPath, "group-activity"),
+  );
   const sessions = new WhatsAppSessionManager(
     api,
     new GroupSyncService(api),
-    (userId) => createWhatsAppClient(userId, config),
+    (authKey) => createWhatsAppClient(authKey, config),
+    {
+      onGroupActivity: (id, phone, kind, notification) =>
+        activity.receive(id, phone, kind, notification),
+      onMessage: (id, phone, message) => collector.receive(id, phone, message),
+      maxSessions: config.maxSessions,
+      sessionStartTimeoutMs: config.sessionStartTimeoutMs,
+      showQrInTerminal: config.showQrInTerminal,
+    },
   );
   const worker = new Worker(
     api,
@@ -30,14 +46,16 @@ async function main(): Promise<void> {
       config.publishingEnabled,
     ),
     new WorkerHeartbeat(api, config.publishingEnabled),
+    activity,
   );
   let shuttingDown = false;
   const shutdown = () => {
     if (shuttingDown) return;
     shuttingDown = true;
     console.log("Encerrando worker; aguarde a confirmação...");
-    void worker
+    void collector
       .stop()
+      .then(() => worker.stop())
       .then(() => {
         console.log("Worker encerrado. Sessão preservada e lock liberado.");
         if (process.connected) process.disconnect();

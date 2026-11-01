@@ -10,8 +10,22 @@ const { Worker } = require("../dist/runtime/worker");
 
 test("validates external session states and identifiers", () => {
   assert.deepEqual(
-    parsePendingSessions([{ userId: "user-1", status: "READY" }]),
-    [{ userId: "user-1", status: "READY" }],
+    parsePendingSessions([
+      {
+        userId: "user-1",
+        connectionId: "connection-1",
+        authKey: "auth-1",
+        status: "READY",
+      },
+    ]),
+    [
+      {
+        userId: "user-1",
+        connectionId: "connection-1",
+        authKey: "auth-1",
+        status: "READY",
+      },
+    ],
   );
   for (const value of [
     null,
@@ -67,13 +81,20 @@ test("refuses malformed sessions returned by the API", async () => {
       new Response(
         JSON.stringify({
           status: "success",
-          data: [{ userId: "user", status: "unexpected" }],
+          data: [
+            {
+              userId: "user",
+              connectionId: "connection-1",
+              authKey: "auth-1",
+              status: "unexpected",
+            },
+          ],
         }),
       ),
   );
   await assert.rejects(
     client.getPendingSessions(),
-    /Estado de sessão inválido/,
+    /Estado de conexão inválido/,
   );
 });
 test("routes pending actions and waits for session shutdown before releasing lock", async () => {
@@ -84,8 +105,18 @@ test("routes pending actions and waits for session shutdown before releasing loc
   });
   const api = {
     getPendingSessions: async () => [
-      { userId: "a", status: "READY" },
-      { userId: "b", status: "DISCONNECTED" },
+      {
+        userId: "user-a",
+        connectionId: "a",
+        authKey: "auth-a",
+        status: "READY",
+      },
+      {
+        userId: "user-b",
+        connectionId: "b",
+        authKey: "auth-b",
+        status: "DISCONNECTED",
+      },
     ],
   };
   const sessions = {

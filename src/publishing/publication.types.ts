@@ -1,5 +1,9 @@
+import { MessageTemplate } from "./message-template";
 import { Client } from "whatsapp-web.js";
 export interface PublicationJob {
+  messageTemplate?: MessageTemplate;
+  messageHeadline?: string | null;
+  connectionId: string;
   offerId: string;
   attemptId: string;
   userId: string;
@@ -20,13 +24,14 @@ export type PublicationOutcome =
   | { outcome: "FAILED" | "UNKNOWN"; errorMessage: string };
 export type PublicationReceipt = { attemptId: string } & PublicationOutcome;
 export interface PublicationApi {
-  claimPublication(userId: string): Promise<PublicationJob | null>;
+  claimPublication(connectionId: string): Promise<PublicationJob | null>;
   completePublication(receipt: PublicationReceipt): Promise<void>;
 }
 export interface PublicationSessions {
-  readyUserIds(): string[];
-  getReadyClient(userId: string): Client | undefined;
+  readyConnectionIds(): string[];
+  getReadyClient(connectionId: string): Client | undefined;
 }
 export interface PublicationProcessor {
+  stop?(): void;
   poll(): Promise<void>;
 }

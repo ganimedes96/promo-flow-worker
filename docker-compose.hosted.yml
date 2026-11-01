@@ -1,0 +1,13 @@
+services:
+  worker:
+    build: .
+    image: promoflow-worker:hosted
+    restart: unless-stopped
+    env_file: .env.hosted
+    volumes:
+      - worker_data:/app/data
+    shm_size: 1gb
+    stop_grace_period: 120s
+    # One active worker only, until per-session ownership/leases are implemented.
+volumes:
+  worker_data:

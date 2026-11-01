@@ -50,6 +50,7 @@ test("does not run group synchronizations concurrently", async () => {
   client.emit("group_join");
   client.emit("group_leave");
   const periodic = manager.refreshGroups();
+  await settle();
   assert.equal(calls, 1);
   finish();
   await periodic;

@@ -1,18 +1,22 @@
 import { Client, LocalAuth } from "whatsapp-web.js";
 import { WorkerConfig } from "../config/worker.config";
 export function createWhatsAppClient(
-  userId: string,
-  config: Pick<WorkerConfig, "sessionPath" | "chromePath">,
+  authKey: string,
+  config: Pick<WorkerConfig, "sessionPath" | "chromePath"> &
+    Partial<Pick<WorkerConfig, "chromeNoSandbox">>,
 ): Client {
-  if (!/^[a-zA-Z0-9_-]+$/.test(userId))
+  if (!/^[a-zA-Z0-9_-]+$/.test(authKey))
     throw new Error("Identificador de sessão inválido");
   return new Client({
     authStrategy: new LocalAuth({
-      clientId: userId,
+      clientId: authKey,
       dataPath: config.sessionPath,
     }),
     puppeteer: {
       headless: true,
+      ...(config.chromeNoSandbox
+        ? { args: ["--no-sandbox", "--disable-setuid-sandbox"] }
+        : {}),
       // The worker closes Chrome after finishing in-flight publications.
       handleSIGINT: false,
       handleSIGTERM: false,

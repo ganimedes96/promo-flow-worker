@@ -1,3 +1,4 @@
+import { parseMessageTemplate } from "./message-template";
 import { PublicationJob, PublicationReceipt } from "./publication.types";
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -35,6 +36,7 @@ export function parsePublicationJob(value: unknown): PublicationJob | null {
     offerId: uuid(item.offerId),
     attemptId: uuid(item.attemptId),
     userId: uuid(item.userId),
+    connectionId: uuid(item.connectionId),
     groupId,
     title: string(item.title),
     description: string(item.description),
@@ -42,6 +44,11 @@ export function parsePublicationJob(value: unknown): PublicationJob | null {
     sourceUrl: string(item.sourceUrl),
     affiliateUrl: optional(item.affiliateUrl),
     couponCode: item.couponCode == null ? null : optional(item.couponCode),
+    messageHeadline:
+      item.messageHeadline == null || item.messageHeadline === ""
+        ? null
+        : optional(item.messageHeadline),
+    messageTemplate: parseMessageTemplate(item.messageTemplate),
     currentPrice,
     originalPrice: optional(item.originalPrice),
     discountPercentage: optional(item.discountPercentage),
