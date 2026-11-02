@@ -1,6 +1,7 @@
 import { MessageTemplate } from "./message-template";
 import { Client } from "whatsapp-web.js";
 export interface PublicationJob {
+  provider?: "TELEGRAM_BOT" | "WHATSAPP_WEB_JS";
   messageTemplate?: MessageTemplate;
   messageHeadline?: string | null;
   connectionId: string;

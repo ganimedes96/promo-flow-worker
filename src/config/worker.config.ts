@@ -1,5 +1,6 @@
 import { resolve } from "node:path";
 export interface WorkerConfig {
+  telegramBotToken?: string;
   collectorUrl?: string;
   collectorToken?: string;
   maxSessions: number;
@@ -75,6 +76,7 @@ export function loadWorkerConfig(
   )
     throw new Error("API remota exige HTTPS");
   return {
+    telegramBotToken: env.TELEGRAM_BOT_TOKEN?.trim() || undefined,
     collectorUrl,
     collectorToken,
     maxSessions,

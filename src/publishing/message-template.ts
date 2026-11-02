@@ -1,5 +1,10 @@
 export interface MessageTemplate {
   showImage: boolean;
+  showLinkPreview: boolean;
+  watermarkEnabled: boolean;
+  watermarkText: string;
+  watermarkPosition: "bottom-right" | "bottom-left" | "top-right" | "top-left";
+  watermarkOpacity: number;
   showHeadline: boolean;
   showTitle: boolean;
   showDescription: boolean;
@@ -14,6 +19,11 @@ export interface MessageTemplate {
 }
 export const DEFAULT_MESSAGE_TEMPLATE: MessageTemplate = {
   showImage: true,
+  showLinkPreview: false,
+  watermarkEnabled: false,
+  watermarkText: "",
+  watermarkPosition: "bottom-right",
+  watermarkOpacity: 70,
   showHeadline: false,
   showTitle: true,
   showDescription: false,
@@ -30,7 +40,29 @@ export function parseMessageTemplate(value: unknown): MessageTemplate {
   if (value == null) return { ...DEFAULT_MESSAGE_TEMPLATE };
   if (typeof value !== "object")
     throw new Error("Padrão de mensagem inválido.");
-  const item = value as Record<string, unknown>;
+  const item = {
+    showLinkPreview: false,
+    watermarkEnabled: false,
+    watermarkText: '',
+    watermarkPosition: 'bottom-right',
+    watermarkOpacity: 70,
+    ...value,
+  } as Record<string, unknown>;
+  if (
+    typeof item.showLinkPreview !== "boolean" ||
+    typeof item.watermarkEnabled !== "boolean" ||
+    typeof item.watermarkText !== "string" ||
+    item.watermarkText.length > 40 ||
+    !["bottom-right", "bottom-left", "top-right", "top-left"].includes(
+      String(item.watermarkPosition),
+    ) ||
+    !Number.isInteger(item.watermarkOpacity) ||
+    Number(item.watermarkOpacity) < 20 ||
+    Number(item.watermarkOpacity) > 100 ||
+    (item.watermarkEnabled && !item.watermarkText.trim()) ||
+    (item.showLinkPreview && (!item.showLink || item.showImage))
+  )
+    throw new Error("Configuração de imagem inválida.");
   for (const key of [
     "showImage",
     "showHeadline",
@@ -54,6 +86,12 @@ export function parseMessageTemplate(value: unknown): MessageTemplate {
     throw new Error("Texto do padrão de mensagem inválido.");
   return {
     showImage: item.showImage as boolean,
+    showLinkPreview: item.showLinkPreview as boolean,
+    watermarkEnabled: item.watermarkEnabled as boolean,
+    watermarkText: item.watermarkText as string,
+    watermarkPosition:
+      item.watermarkPosition as MessageTemplate["watermarkPosition"],
+    watermarkOpacity: item.watermarkOpacity as number,
     showHeadline: item.showHeadline as boolean,
     showTitle: item.showTitle as boolean,
     showDescription: item.showDescription as boolean,

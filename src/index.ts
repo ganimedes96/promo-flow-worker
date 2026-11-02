@@ -1,3 +1,6 @@
+import { TelegramBotClient } from "./telegram/bot.client";
+import { TelegramBotPublisher } from "./telegram/bot-publisher";
+import { PublicationPipeline } from "./publishing/publication-pipeline";
 import { join } from "node:path";
 import { GroupActivityTracker } from "./whatsapp/group-activity";
 import { CollectionClient } from "./collection/collector.client";
@@ -39,12 +42,25 @@ async function main(): Promise<void> {
     sessions,
     new WorkerLock(config.sessionPath),
     config.pollIntervalMs,
-    new PublicationWorker(
-      api,
-      sessions,
-      new ReceiptStore(config.receiptsPath),
-      config.publishingEnabled,
-    ),
+    new PublicationPipeline([
+      new PublicationWorker(
+        api,
+        sessions,
+        new ReceiptStore(config.receiptsPath),
+        config.publishingEnabled,
+      ),
+      ...(config.telegramBotToken
+        ? [
+            new TelegramBotPublisher(
+              new TelegramBotClient(config.telegramBotToken),
+              api,
+              new ReceiptStore(config.receiptsPath),
+              join(config.sessionPath, "telegram-bot-cursor.json"),
+              config.publishingEnabled,
+            ),
+          ]
+        : []),
+    ]),
     new WorkerHeartbeat(api, config.publishingEnabled),
     activity,
   );

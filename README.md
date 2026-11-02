@@ -140,3 +140,20 @@ Testes sem WhatsApp real: pnpm build e node --test test/message-template.test.cj
 
 ## Monitoramento de grupos
 Atualize a API e aplique `20261101050000_group_growth`, depois reinicie o worker. A sincronização inclui contagem de participantes quando disponível. Entradas/saídas recebidas pelo SDK são persistidas em `data/sessions/group-activity` (ou SESSION_PATH configurado), reenviadas após falhas e deduplicadas na API. Não exclua esse diretório durante reinícios. Pendências expiram após 72 horas. O histórico começa na ativação; períodos offline podem não ser recuperados. Não armazenamos IDs de participantes.
+
+## Marca d’água e prévia do link
+Aplique a migration `20261101060000_message_media`, publique API e frontend e atualize/reinicie o worker com `pnpm install`. O protocolo `message-media-v2` impede que workers antigos ignorem as configurações. Minhas mensagens permite foto, solicitação de prévia do link ou texto. A marca textual (até 40 caracteres) tem posição e opacidade configuráveis, é aplicada somente à cópia da foto enviada e preserva o original. Prévia do link depende do WhatsApp e da loja; é ilustrativa na interface e não recebe marca d’água. Erros na marca interrompem o envio antes de chamar o WhatsApp.
+
+## Espelhamento pessoal de grupos
+A migration `20261101070000_personal_mirroring` adiciona o acompanhamento pessoal de até três grupos de origem por usuário, incluindo origens pausadas. Publique a API e o frontend após aplicar a migration. O transporte existente worker → coletor → API é reaproveitado e precisa estar configurado e ativo. A captura administrativa continua indo para a Central; o espelhamento pessoal cria somente ofertas da conta proprietária.
+
+A página `/mirroring` permite habilitar, pausar e remover origens. Só novas mensagens dos grupos escolhidos são capturadas; não há busca de histórico. Acesso expirado suspende a captura. Cada produto/preço/cupom é deduplicado por usuário; imagens podem enriquecer uma captura repetida. Excluir uma oferta mantém a chave de deduplicação para evitar que a mesma oferta reapareça em uma repetição da mensagem.
+
+As ofertas entram sem conexão de destino, sem grupo e sem agendamento, com afiliação pendente. A extensão 0.13.0 processa a fila de conversão de Mercado Livre em segundo plano, no ambiente selecionado no popup, mesmo com a aba do PromoFlow fechada. O Chrome e os servidores configurados precisam permanecer disponíveis. Não há conversão no servidor nem garantia de comissão. Amazon/Shopee exigem link próprio manual com confirmação. Apenas depois da aplicação do link o usuário vincula um grupo favorito na tabela; vincular não agenda. Os fluxos individuais, em lote e o claim do worker bloqueiam capturas sem afiliação aplicada. Dados ausentes devem ser completados em Editar antes de agendar.
+
+## Execução contínua no Windows
+Use `../ops/start-services.ps1`, `status-services.ps1` e `stop-services.ps1`. O modo atual supervisiona somente worker e coletor, com API/frontend na Vercel. A inicialização automática é instalada por `../ops/install-services-startup.ps1`. Não execute `pnpm start` em paralelo com o supervisor. Consulte `../ops/README.md` para logs, atualização e limites do modo local.
+
+## Publicador Telegram
+
+O mesmo processo suporta um bot de publicação configurado por `TELEGRAM_BOT_TOKEN` no `.env`. O token não deve ir para a Vercel ou frontend. Veja `../promo-flow-api/docs/telegram-publisher.md` para ativação, vínculo, permissões, cotas e limitações.

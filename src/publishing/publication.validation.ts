@@ -27,12 +27,20 @@ export function parsePublicationJob(value: unknown): PublicationJob | null {
   if (value === null) return null;
   const item = record(value);
   const groupId = string(item.groupId);
-  if (!/^\d+(?:-\d+)?@g\.us$/.test(groupId))
+  const provider = item.provider ?? "WHATSAPP_WEB_JS";
+  if (provider !== "TELEGRAM_BOT" && provider !== "WHATSAPP_WEB_JS")
+    throw new Error("Provedor de publicação inválido");
+  if (
+    !(provider === "TELEGRAM_BOT"
+      ? /^-\d{1,20}$/.test(groupId)
+      : /^\d+(?:-\d+)?@g\.us$/.test(groupId))
+  )
     throw new Error("Grupo de publicação inválido");
   const currentPrice = string(item.currentPrice);
   if (!Number.isFinite(Number(currentPrice)) || Number(currentPrice) <= 0)
     throw new Error("Preço de publicação inválido");
   return {
+    provider,
     offerId: uuid(item.offerId),
     attemptId: uuid(item.attemptId),
     userId: uuid(item.userId),

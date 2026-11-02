@@ -36,3 +36,16 @@ test('disabling image sends text without downloading a photo or generating a lin
  await new PublicationWorker(api, sessions, store, true).poll();
  assert.equal(typeof sent.body, 'string'); assert.ok(sent.body.includes('*Fone Bluetooth*')); assert.equal(sent.options.caption, undefined); assert.equal(sent.options.linkPreview, false); assert.equal(receipt.outcome, 'SUCCESS');
 });
+
+
+test('link preview mode requests preview and never downloads or sends product media', async () => {
+ require('../dist/publishing/image-download').downloadImage = async () => { throw Error('must not download'); };
+ const { PublicationWorker } = require('../dist/publishing/publication-worker');
+ let sent;
+ const api = { claimPublication: async () => ({ ...job, messageTemplate: { ...DEFAULT_MESSAGE_TEMPLATE, showImage: false, showLinkPreview: true } }), completePublication: async () => {} };
+ const sessions = { readyConnectionIds: () => ['connection'], getReadyClient: () => ({ sendMessage: async (_group, body, options) => { sent = { body, options }; return { id: { _serialized: 'message' } }; } }) };
+ await new PublicationWorker(api, sessions, { list: async () => [], save: async () => {}, remove: async () => {} }, true).poll();
+ assert.equal(typeof sent.body, 'string');
+ assert.equal(sent.options.linkPreview, true);
+ assert.throws(() => parseMessageTemplate({ ...DEFAULT_MESSAGE_TEMPLATE, showLinkPreview: true }));
+});

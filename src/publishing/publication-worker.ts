@@ -9,6 +9,7 @@ import {
 } from "./publication.types";
 import { ReceiptStore } from "./receipt-store";
 import { buildCaption } from "./caption";
+import { applyWatermark } from "./watermark";
 import { downloadImage } from "./image-download";
 import { errorMessage } from "../utils/error-message";
 export class PublicationWorker implements PublicationProcessor {
@@ -36,7 +37,10 @@ export class PublicationWorker implements PublicationProcessor {
       if (this.stopping) break;
       const job = await this.api.claimPublication(connectionId);
       if (!job) continue;
-      if (job.connectionId !== connectionId)
+      if (
+        (job.provider && job.provider !== "WHATSAPP_WEB_JS") ||
+        job.connectionId !== connectionId
+      )
         throw new Error(
           "A API retornou uma publicação de outra conexão. Nenhum envio foi iniciado.",
         );
@@ -49,10 +53,12 @@ export class PublicationWorker implements PublicationProcessor {
       if (this.stopping)
         throw new Error("Worker encerrando antes de iniciar o envio.");
       const caption = buildCaption(job);
-      const media =
+      let media =
         job.messageTemplate?.showImage === false
           ? null
           : await downloadImage(job.imageUrl);
+      if (media && job.messageTemplate?.watermarkEnabled)
+        media = await applyWatermark(media, job.messageTemplate);
       const client = this.sessions.getReadyClient(job.connectionId);
       if (!client)
         throw new Error("Sessão do WhatsApp indisponível antes do envio.");
@@ -72,7 +78,7 @@ export class PublicationWorker implements PublicationProcessor {
           client.sendMessage(job.groupId, media ?? caption, {
             ...(media
               ? { caption, sendMediaAsHd: true }
-              : { linkPreview: false }),
+              : { linkPreview: job.messageTemplate?.showLinkPreview === true }),
             sendSeen: false,
             waitUntilMsgSent: true,
           }),

@@ -1,0 +1,22 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const sharp = require('sharp');
+const { MessageMedia } = require('whatsapp-web.js');
+const { applyWatermark } = require('../dist/publishing/watermark');
+const { DEFAULT_MESSAGE_TEMPLATE } = require('../dist/publishing/message-template');
+test('watermark changes the selected corner and preserves the original buffer', async () => {
+ const source = await sharp({ create: { width: 600, height: 400, channels: 3, background: 'white' } }).png().toBuffer();
+ const media = new MessageMedia('image/png', source.toString('base64'), 'original.png');
+ const output = await applyWatermark(media, { ...DEFAULT_MESSAGE_TEMPLATE, watermarkEnabled: true, watermarkText: '@MinhaMarca & <teste>', watermarkOpacity: 100, watermarkPosition: 'bottom-right' });
+ assert.equal(media.data, source.toString('base64'));
+ assert.equal(output.mimetype, 'image/jpeg');
+ const bytes = Buffer.from(output.data, 'base64');
+ const metadata = await sharp(bytes).metadata();
+ assert.equal(metadata.width, 600); assert.equal(metadata.height, 400);
+ const top = await sharp(await sharp(bytes).extract({ left: 0, top: 0, width: 100, height: 100 }).toBuffer()).stats();
+ const bottom = await sharp(await sharp(bytes).extract({ left: 300, top: 350, width: 300, height: 50 }).toBuffer()).stats();
+ assert.ok(top.channels[0].mean > 250);
+ assert.ok(bottom.channels[0].mean < top.channels[0].mean);
+ assert.equal(await applyWatermark(media, DEFAULT_MESSAGE_TEMPLATE), media);
+ await assert.rejects(applyWatermark(media, { ...DEFAULT_MESSAGE_TEMPLATE, watermarkEnabled: true, watermarkText: '' }));
+});

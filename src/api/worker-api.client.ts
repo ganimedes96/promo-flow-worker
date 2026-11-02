@@ -1,3 +1,9 @@
+import { BotIdentity, record } from "../telegram/bot.client";
+import {
+  BindTelegramDestination,
+  TelegramDestination,
+  TelegramPublisherApi,
+} from "../telegram/bot.types";
 import { randomUUID } from "node:crypto";
 import {
   PublicationApi,
@@ -28,7 +34,9 @@ export class WorkerApiError extends Error {
   }
 }
 type HttpMethod = "GET" | "PUT" | "POST";
-export class WorkerApiClient implements WorkerApi, PublicationApi {
+export class WorkerApiClient
+  implements WorkerApi, PublicationApi, TelegramPublisherApi
+{
   private readonly instanceId = randomUUID();
   async heartbeat(
     publishingEnabled: boolean,
@@ -55,7 +63,7 @@ export class WorkerApiClient implements WorkerApi, PublicationApi {
         "Content-Type": "application/json",
         "x-worker-token": this.config.apiToken,
         "x-worker-protocol": "connections-v1",
-        "x-worker-features": "message-template-v1",
+        "x-worker-features": "message-media-v2,telegram-bot-v1",
       },
       body: body === undefined ? undefined : JSON.stringify(body),
       signal: AbortSignal.timeout(15000),
@@ -91,6 +99,59 @@ export class WorkerApiClient implements WorkerApi, PublicationApi {
       "POST",
       body,
     );
+  }
+  async registerTelegramBot(identity: BotIdentity): Promise<void> {
+    await this.request(
+      "/internal/telegram-publisher/identity",
+      "PUT",
+      identity,
+    );
+  }
+  async bindTelegramDestination(
+    input: BindTelegramDestination,
+  ): Promise<boolean> {
+    return (
+      record(
+        await this.request("/internal/telegram-publisher/bind", "POST", input),
+      ).accepted === true
+    );
+  }
+  async telegramAvailability(
+    groupId: string,
+    available: boolean,
+  ): Promise<void> {
+    await this.request(
+      "/internal/telegram-publisher/destinations/" +
+        encodeURIComponent(groupId),
+      "PUT",
+      { available },
+    );
+  }
+  async telegramDestinations(): Promise<TelegramDestination[]> {
+    const rows = await this.request(
+      "/internal/telegram-publisher/destinations",
+    );
+    if (!Array.isArray(rows)) throw new Error("Destinos Telegram inválidos.");
+    return rows.map((raw) => {
+      const row = record(raw);
+      if (
+        typeof row.connectionId !== "string" ||
+        !/^[0-9a-f-]{36}$/i.test(row.connectionId) ||
+        typeof row.groupId !== "string" ||
+        !/^[0-9a-f-]{36}$/i.test(row.groupId) ||
+        typeof row.chatId !== "string" ||
+        !/^-\d{1,20}$/.test(row.chatId) ||
+        typeof row.botId !== "string" ||
+        !/^\d+$/.test(row.botId)
+      )
+        throw new Error("Destino Telegram inválido.");
+      return {
+        connectionId: row.connectionId,
+        groupId: row.groupId,
+        chatId: row.chatId,
+        botId: row.botId,
+      };
+    });
   }
   async getPendingSessions(): Promise<PendingSession[]> {
     return parsePendingSessions(
